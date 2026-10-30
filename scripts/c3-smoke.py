@@ -4,6 +4,7 @@
 import json
 from pathlib import Path
 import socket
+import sys
 import subprocess
 import tempfile
 import time
@@ -44,8 +45,91 @@ def stop(process):
             process.wait(timeout=5)
 
 
-def run():
-    account_port, transaction_port = port(), port()
+class McpSession:
+    """Minimal synchronous Streamable HTTP client used only for protocol smoke tests."""
+    def __init__(self, base):
+        self.url = base + "/mcp"
+        self.session = None
+        self.version = "2025-03-26"
+        self.sequence = 0
+        response = self.rpc("initialize", {"protocolVersion": self.version, "capabilities": {},
+                                           "clientInfo": {"name": "adria-smoke", "version": "1.0"}})
+        self.version = response["result"]["protocolVersion"]
+        self.rpc("notifications/initialized", notification=True)
+
+    def rpc(self, method, params=None, notification=False):
+        self.sequence += 1
+        body = {"jsonrpc": "2.0", "method": method}
+        if not notification:
+            body["id"] = self.sequence
+        if params is not None:
+            body["params"] = params
+        headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream",
+                   "MCP-Protocol-Version": self.version}
+        if self.session:
+            headers["Mcp-Session-Id"] = self.session
+        req = Request(self.url, data=json.dumps(body).encode(), headers=headers, method="POST")
+        with urlopen(req, timeout=10) as response:
+            self.session = response.headers.get("Mcp-Session-Id", self.session)
+            if response.status in (202, 204):
+                return None
+            if "text/event-stream" in response.headers.get("Content-Type", ""):
+                for line in response:
+                    if line.startswith(b"data:"):
+                        message = json.loads(line[5:])
+                        if message.get("id") == self.sequence:
+                            assert "error" not in message, message
+                            return message
+                raise AssertionError("No MCP response event")
+            message = json.load(response)
+            assert "error" not in message, message
+            return message
+
+    def tool(self, name, arguments):
+        result = self.rpc("tools/call", {"name": name, "arguments": arguments})["result"]
+        assert not result.get("isError", False), result
+        return json.loads(next(item["text"] for item in result["content"] if item["type"] == "text"))
+
+
+def verify_interfaces(account_url, transaction_url):
+    def graphql(base, query, variables=None):
+        status, response = request(base, "/graphql", "POST", {"query": query, "variables": variables or {}})
+        assert status == 200 and not response.get("errors"), response
+        return response["data"]
+
+    account_mcp, transaction_mcp = McpSession(account_url), McpSession(transaction_url)
+    account_names = {tool["name"] for tool in account_mcp.rpc("tools/list")["result"]["tools"]}
+    transaction_names = {tool["name"] for tool in transaction_mcp.rpc("tools/list")["result"]["tools"]}
+    assert {"getAccount", "listAccounts", "createAccount", "updateAccountStatus", "transfer"} <= account_names
+    assert {"getTransaction", "listTransactions", "getTransactionsByAccount", "createTransaction"} <= transaction_names
+    source = graphql(account_url,
+                     'mutation { createAccount(input:{customerReference:"graphql-smoke", currency:"MAD", balance:"500"}) { id } }')["createAccount"]["id"]
+    destination = account_mcp.tool("createAccount", {"input": {"customerReference": "mcp-smoke", "currency": "MAD", "balance": "50"}})["id"]
+    key = str(uuid.uuid4())
+    transaction_input = {"accountId": source, "amount": "10", "currency": "MAD", "merchantCategory": "FOOD", "country": "MA"}
+    mutation = "mutation($input:CreateTransactionInput!,$key:ID!) { createTransaction(input:$input,idempotencyKey:$key) { id } }"
+    transaction = graphql(transaction_url, mutation, {"input": transaction_input, "key": key})["createTransaction"]
+    replay = transaction_mcp.tool("createTransaction", {"input": transaction_input, "idempotencyKey": key})
+    assert replay["id"] == transaction["id"]
+    assert request(account_url, f"/api/accounts/{source}")[1]["balance"] == 490
+    assert transaction_mcp.tool("getTransaction", {"id": replay["id"]})["id"] == replay["id"]
+    assert len(transaction_mcp.tool("getTransactionsByAccount", {"accountId": source})) == 1
+    print("Live GraphQL creation and MCP replay share one transaction and one debit; MCP tools/list and tools/call work.")
+
+    transfer_key = str(uuid.uuid4())
+    transfer_input = {"sourceAccountId": source, "destinationAccountId": destination, "amount": "25"}
+    status, transfer = request(account_url, "/api/transfers", "POST", transfer_input, transfer_key)
+    assert status == 201, transfer
+    transfer_query = "mutation($input:TransferInput!,$key:ID!) { transfer(input:$input,idempotencyKey:$key) { id } }"
+    assert graphql(account_url, transfer_query, {"input": transfer_input, "key": transfer_key})["transfer"]["id"] == transfer["id"]
+    assert account_mcp.tool("transfer", {"input": transfer_input, "idempotencyKey": transfer_key})["id"] == transfer["id"]
+    assert account_mcp.tool("getAccount", {"id": source})["balance"] == 465
+    assert account_mcp.tool("getAccount", {"id": destination})["balance"] == 75
+    print("Live REST/GraphQL/MCP transfer replays share one receipt; balances 490/50 -> 465/75 conserve total funds.")
+
+
+def run(default_ports=False):
+    account_port, transaction_port = (8081, 8082) if default_ports else (port(), port())
     while transaction_port == account_port:
         transaction_port = port()
     account_url = f"http://127.0.0.1:{account_port}"
@@ -111,6 +195,7 @@ def run():
             assert request(account_url, f"/api/accounts/{account_id}")[1]["balance"] == 900
             assert len(request(transaction_url, "/api/transactions")[1]) == 1
             print("After both JVMs restart: transaction, balance, processing record and debit ledger survive; no second debit.")
+            verify_interfaces(account_url, transaction_url)
         except Exception:
             for logfile in directory.glob("*.log"):
                 print(f"Last lines of {logfile.name}:")
@@ -122,4 +207,4 @@ def run():
 
 
 if __name__ == "__main__":
-    run()
+    run("--default-ports" in sys.argv)

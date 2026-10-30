@@ -1,0 +1,37 @@
+type Query {
+    accountById(id: ID!): Account
+    accounts: [Account!]!
+}
+type Mutation {
+    transfer(input: TransferInput!, idempotencyKey: ID!): Transfer
+    createAccount(input: CreateAccountInput!): Account
+    updateAccountStatus(id: ID!, status: AccountStatus!): Account
+}
+enum AccountStatus { ACTIVE BLOCKED }
+type Account {
+    id: ID!
+    customerReference: String!
+    status: AccountStatus!
+    currency: String!
+    balance: Float!
+}
+# Decimal inputs use strings to preserve cent precision before Bean Validation.
+input CreateAccountInput {
+    customerReference: String!
+    currency: String!
+    balance: String!
+}
+
+input TransferInput {
+    sourceAccountId: ID!
+    destinationAccountId: ID!
+    amount: String!
+}
+type Transfer {
+    id: ID!
+    sourceAccountId: ID!
+    destinationAccountId: ID!
+    amount: String!
+    currency: String!
+    createdAt: String!
+}

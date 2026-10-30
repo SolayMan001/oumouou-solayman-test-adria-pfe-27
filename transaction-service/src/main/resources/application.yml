@@ -1,4 +1,16 @@
 spring:
+  ai:
+    mcp:
+      server:
+        name: transaction-service
+        version: 1.0.0
+        protocol: STREAMABLE
+        type: SYNC
+        streamable-http:
+          mcp-endpoint: /mcp
+  graphql:
+    graphiql:
+      enabled: true
   application:
     name: transaction-service
   cloud:
@@ -30,3 +42,10 @@ bank:
 account:
   service:
     url: http://localhost:8081
+
+bank-account-circuit:
+  sliding-window-size: 10
+  minimum-calls: 5
+  failure-rate-threshold: 50
+  open-duration: 5s
+  half-open-calls: 2

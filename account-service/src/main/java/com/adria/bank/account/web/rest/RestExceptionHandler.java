@@ -30,7 +30,12 @@ public class RestExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
     public ProblemDetail handleOperationCollision(org.springframework.dao.DataIntegrityViolationException exception) {
-        return problem(HttpStatus.CONFLICT, "OPERATION_CONFLICT", "Operation ID conflicts with an existing debit.");
+        return problem(HttpStatus.CONFLICT, "OPERATION_CONFLICT", "Operation ID conflicts with an existing financial operation.");
+    }
+
+    @ExceptionHandler(com.adria.bank.account.service.TransferNotFoundException.class)
+    public ProblemDetail handleTransferNotFound(com.adria.bank.account.service.TransferNotFoundException exception) {
+        return problem(HttpStatus.NOT_FOUND, "TRANSFER_NOT_FOUND", exception.getMessage());
     }
 
     @ExceptionHandler(AccountNotFoundException.class)

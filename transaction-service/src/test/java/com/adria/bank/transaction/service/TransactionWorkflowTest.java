@@ -42,6 +42,8 @@ class TransactionWorkflowTest {
         properties.add("spring.cloud.openfeign.client.config.account-service.readTimeout", () -> 300);
         properties.add("spring.datasource.url", () -> "jdbc:h2:mem:workflow-tests;DB_CLOSE_DELAY=-1;LOCK_TIMEOUT=10000");
     }
+    @Autowired io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry circuits;
+    @Autowired org.springframework.ai.tool.ToolCallbackProvider toolCallbacks;
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper mapper;
     @Autowired TransactionRepository transactions;
@@ -49,7 +51,7 @@ class TransactionWorkflowTest {
     @MockitoSpyBean TransactionPersistence persistence;
 
     @BeforeEach
-    void setup() { operations.deleteAll(); transactions.deleteAll(); remote.reset(); }
+    void setup() { circuits.circuitBreaker("account-service").reset(); operations.deleteAll(); transactions.deleteAll(); remote.reset(); }
     @AfterAll
     static void shutdown() { remote.server.stop(0); remote.executor.shutdownNow(); }
 
@@ -219,6 +221,71 @@ class TransactionWorkflowTest {
         mvc.perform(post("/api/transactions").contentType(MediaType.APPLICATION_JSON).content(body("10.00", "MAD")))
                 .andExpect(status().isBadRequest());
         assertThat(remote.debitCalls.get()).isZero();
+    }
+
+    @Test
+    void graphqlCreationAndRestMcpReplaysShareOneDebit() throws Exception {
+        UUID key = UUID.randomUUID();
+        var response = mapper.readTree(graphql(key, "MAD"));
+        String id = response.at("/data/createTransaction/id").asText();
+        assertThat(response.path("errors").isMissingNode()).isTrue();
+        assertThat(id).isNotEmpty();
+        assertThat(mapper.readTree(createTool().call(toolInput(key, "MAD"))).path("id").asText()).isEqualTo(id);
+        assertThat(mapper.readTree(submit(key, "10.00", "MAD", 201)).path("id").asText()).isEqualTo(id);
+        assertThat(remote.debitCalls.get()).isEqualTo(1);
+        assertThat(remote.balance).isEqualByComparingTo("90.00");
+        assertThat(transactions.count()).isEqualTo(1);
+    }
+
+    @Test
+    void mcpCreationUsesAccountDebitAndOriginalWorkflow() throws Exception {
+        UUID key = UUID.randomUUID();
+        String id = mapper.readTree(createTool().call(toolInput(key, "MAD"))).path("id").asText();
+        assertThat(id).isNotEmpty();
+        assertThat(mapper.readTree(graphql(key, "MAD")).at("/data/createTransaction/id").asText()).isEqualTo(id);
+        assertThat(remote.balance).isEqualByComparingTo("90.00");
+        assertThat(remote.debitCalls.get()).isEqualTo(1);
+        assertThat(transactions.count()).isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"blocked,MAD,ACCOUNT_BLOCKED", "insufficient,MAD,INSUFFICIENT_BALANCE", "active,EUR,CURRENCY_MISMATCH"})
+    void graphqlAndMcpCannotBypassAccountBusinessRules(String condition, String currency, String code) throws Exception {
+        remote.condition = condition;
+        var response = mapper.readTree(graphql(UUID.randomUUID(), currency));
+        assertThat(response.at("/errors/0/extensions/code").asText()).isEqualTo(code);
+        assertThatThrownBy(() -> createTool().call(toolInput(UUID.randomUUID(), currency))).isInstanceOf(RuntimeException.class);
+        assertThat(remote.debitCalls.get()).isZero();
+        assertThat(transactions.count()).isZero();
+    }
+
+    @Test
+    void ambiguousMcpTimeoutCanBeReconciledThroughGraphqlWithoutAnotherDebit() throws Exception {
+        UUID key = UUID.randomUUID();
+        remote.condition = "timeout-after-debit";
+        assertThatThrownBy(() -> createTool().call(toolInput(key, "MAD"))).isInstanceOf(RuntimeException.class);
+        var response = mapper.readTree(graphql(key, "MAD"));
+        assertThat(response.path("errors").isMissingNode()).isTrue();
+        assertThat(response.at("/data/createTransaction/id").asText()).isNotEmpty();
+        assertThat(remote.debitCalls.get()).isEqualTo(1);
+        assertThat(remote.balance).isEqualByComparingTo("90.00");
+        assertThat(transactions.count()).isEqualTo(1);
+    }
+
+    private org.springframework.ai.tool.ToolCallback createTool() {
+        return Arrays.stream(toolCallbacks.getToolCallbacks()).filter(tool -> tool.getToolDefinition().name().equals("createTransaction")).findFirst().orElseThrow();
+    }
+    private String toolInput(UUID key, String currency) throws Exception {
+        return mapper.writeValueAsString(Map.of("idempotencyKey", key.toString(), "input",
+                mapper.readTree(body("10.00", currency))));
+    }
+    private String graphql(UUID key, String currency) throws Exception {
+        var input = Map.of("accountId", remote.accountId.toString(), "amount", "10.00", "currency", currency,
+                "merchantCategory", "GROCERIES", "country", "MA");
+        String query = "mutation($input:CreateTransactionInput!,$key:ID!) { createTransaction(input:$input,idempotencyKey:$key) { id } }";
+        return mvc.perform(post("/graphql").contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(Map.of("query", query, "variables", Map.of("input", input, "key", key.toString())))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
     }
 
     private String submit(UUID key, String amount, String currency, int expectedStatus) throws Exception {

@@ -1,4 +1,16 @@
 spring:
+  ai:
+    mcp:
+      server:
+        name: account-service
+        version: 1.0.0
+        protocol: STREAMABLE
+        type: SYNC
+        streamable-http:
+          mcp-endpoint: /mcp
+  graphql:
+    graphiql:
+      enabled: true
   application:
     name: account-service
   jackson:

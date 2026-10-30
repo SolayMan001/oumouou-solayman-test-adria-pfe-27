@@ -1,2 +1,2 @@
-/** Reserved for a future GraphQL interface. No GraphQL functionality is implemented. */
+/** GraphQL adapters to the shared application service layer. */
 package com.adria.bank.account.web.graphql;

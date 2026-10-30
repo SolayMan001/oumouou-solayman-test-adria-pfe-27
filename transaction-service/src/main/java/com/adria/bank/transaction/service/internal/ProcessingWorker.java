@@ -3,6 +3,8 @@ package com.adria.bank.transaction.service.internal;
 import java.math.BigDecimal;
 import java.util.UUID;
 import com.adria.bank.transaction.client.AccountFeignClient;
+import com.adria.bank.transaction.client.AccountGateway;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import com.adria.bank.transaction.domain.BankTransaction;
 import com.adria.bank.transaction.domain.ProcessingOperation;
 import com.adria.bank.transaction.repository.ProcessingOperationRepository;
@@ -21,10 +23,10 @@ public class ProcessingWorker {
     private final ProcessingOperationRepository operations;
     private final TransactionRepository transactions;
     private final TransactionPersistence persistence;
-    private final AccountFeignClient accounts;
+    private final AccountGateway accounts;
 
     public ProcessingWorker(ProcessingOperationRepository operations, TransactionRepository transactions,
-            TransactionPersistence persistence, AccountFeignClient accounts) {
+            TransactionPersistence persistence, AccountGateway accounts) {
         this.operations = operations; this.transactions = transactions; this.persistence = persistence; this.accounts = accounts;
     }
 
@@ -44,6 +46,7 @@ public class ProcessingWorker {
         AccountFeignClient.AccountView account;
         try { account = accounts.get(command.accountId()); }
         catch (FeignException error) { return remoteFailure(op, error, false); }
+        catch (CallNotPermittedException open) { return dependencyUnavailable(); }
         if (!command.accountId().equals(account.id())) { return Result.error(503, "ACCOUNT_INTEGRATION_UNAVAILABLE", "Account Service returned an unexpected account."); }
         if (!"ACTIVE".equals(account.status())) { return reject(op, "ACCOUNT_BLOCKED", "Only ACTIVE accounts can be debited."); }
         if (!command.currency().equals(account.currency())) { return reject(op, "CURRENCY_MISMATCH", "Transaction currency must match account currency."); }
@@ -56,6 +59,7 @@ public class ProcessingWorker {
                 op.uncertain(); return recoveryRequired();
             }
         } catch (FeignException error) { return remoteFailure(op, error, true); }
+        catch (CallNotPermittedException open) { return dependencyUnavailable(); }
         return complete(op);
     }
 
@@ -66,7 +70,7 @@ public class ProcessingWorker {
             if ("DEBITED".equals(debit.state())) { return complete(op); }
             if ("CANCELLED".equals(debit.state()) || "COMPENSATED".equals(debit.state())) { op.cancel(); return cancelled(); }
             return recoveryRequired();
-        } catch (FeignException error) {
+        } catch (FeignException | CallNotPermittedException error) {
             // Absence is not proof that an earlier debit is no longer in flight.
             return recoveryRequired();
         }
@@ -88,7 +92,7 @@ public class ProcessingWorker {
             }
             op.cancel();
             return cancelled();
-        } catch (FeignException error) { return recoveryRequired(); }
+        } catch (FeignException | CallNotPermittedException error) { return recoveryRequired(); }
     }
 
     private boolean matches(ProcessingOperation op, AccountFeignClient.DebitView debit) {
@@ -118,6 +122,7 @@ public class ProcessingWorker {
     private Result reject(ProcessingOperation op, String code, String detail) {
         op.reject(409, code, detail); return Result.error(409, code, detail);
     }
+    private Result dependencyUnavailable() { return Result.error(503, "ACCOUNT_INTEGRATION_UNAVAILABLE", "Account Service circuit is open. Reuse the same key for recovery."); }
     private Result cancelled() { return Result.error(409, "OPERATION_CANCELLED", "Operation has been cancelled or compensated."); }
     private Result recoveryRequired() { return Result.error(503, "RECOVERY_REQUIRED", "Outcome requires reconciliation. Reuse the same key, or explicitly cancel the operation; do not submit a new key."); }
     private ProcessingOperation lock(UUID id) {

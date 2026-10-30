@@ -1,0 +1,24 @@
+type Query {
+    transactionById(id: ID!): BankTransaction
+    transactions: [BankTransaction!]!
+    transactionsByAccountId(accountId: ID!): [BankTransaction!]!
+}
+type Mutation {
+    createTransaction(input: CreateTransactionInput!, idempotencyKey: ID!): BankTransaction
+}
+type BankTransaction {
+    id: ID!
+    accountId: ID!
+    amount: String!
+    currency: String!
+    merchantCategory: String!
+    country: String!
+    createdAt: String!
+}
+input CreateTransactionInput {
+    accountId: ID!
+    amount: String!
+    currency: String!
+    merchantCategory: String!
+    country: String!
+}
