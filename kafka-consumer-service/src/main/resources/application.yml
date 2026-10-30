@@ -1,0 +1,7 @@
+spring:
+  application:
+    name: kafka-consumer-service
+
+# Reserved for the web server when it is introduced in a later part.
+server:
+  port: 8084
