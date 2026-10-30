@@ -65,6 +65,11 @@ public class Account {
         balance = Money.balance(decimalBalance().add(credit)).doubleValue();
     }
 
+    /** Used only by the debit ledger to reverse its original debit, even if now blocked. */
+    public void reverseDebit(BigDecimal amount) {
+        balance = Money.balance(decimalBalance().add(Money.amount(amount))).doubleValue();
+    }
+
     private void requireActive() {
         if (status != AccountStatus.ACTIVE) {
             throw new AccountConflictException("ACCOUNT_BLOCKED", "Only ACTIVE accounts can be debited or credited.");

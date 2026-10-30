@@ -46,7 +46,7 @@ class TransactionLimitConfigurationTest {
     @Test
     void configuredMaximumIsAppliedToPublicAndInternalCreation() throws Exception {
         UUID accountId = UUID.randomUUID();
-        mvc.perform(post("/api/transactions").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/transactions").header("Idempotency-Key", UUID.randomUUID()).contentType(MediaType.APPLICATION_JSON)
                         .content(request(accountId, "25.01")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
@@ -58,7 +58,7 @@ class TransactionLimitConfigurationTest {
 
     @Test
     void requestAtConfiguredMaximumStillReturns503AndSavesNothing() throws Exception {
-        mvc.perform(post("/api/transactions").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/transactions").header("Idempotency-Key", UUID.randomUUID()).contentType(MediaType.APPLICATION_JSON)
                         .content(request(UUID.randomUUID(), "25.00")))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.code").value("ACCOUNT_INTEGRATION_UNAVAILABLE"));

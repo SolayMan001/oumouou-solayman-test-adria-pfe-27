@@ -4,3 +4,7 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
+
+account:
+  service:
+    url: http://127.0.0.1:1

@@ -35,20 +35,23 @@ class TransactionServiceTest {
     @Test
     void validPublicCreationIsUnavailableAndNeverTouchesRepository() {
         TransactionRepository repository = mock(TransactionRepository.class);
-        TransactionService service = new TransactionService(repository, validator("1000"));
+        TransactionWorkflow workflow = mock(TransactionWorkflow.class);
+        TransactionService service = new TransactionService(repository, validator("1000"), workflow);
 
-        assertThatThrownBy(() -> service.create(command("100.00")))
-                .isInstanceOf(AccountIntegrationUnavailableException.class)
-                .hasMessageContaining("Account Service integration");
+        org.mockito.Mockito.when(workflow.create(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new TransactionProcessingException(503, "ACCOUNT_INTEGRATION_UNAVAILABLE", "Account Service is unavailable."));
+        assertThatThrownBy(() -> service.create(UUID.randomUUID(), command("100.00")))
+                .isInstanceOf(TransactionProcessingException.class)
+                .hasMessageContaining("Account Service is unavailable");
         verifyNoInteractions(repository);
     }
 
     @Test
     void amountAboveLimitIsRejectedBeforeIntegrationError() {
         TransactionRepository repository = mock(TransactionRepository.class);
-        TransactionService service = new TransactionService(repository, validator("1000"));
+        TransactionService service = new TransactionService(repository, validator("1000"), mock(TransactionWorkflow.class));
 
-        assertThatThrownBy(() -> service.create(command("1000.01")))
+        assertThatThrownBy(() -> service.create(UUID.randomUUID(), command("1000.01")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("1000");
         verifyNoInteractions(repository);
@@ -58,9 +61,9 @@ class TransactionServiceTest {
     @ValueSource(strings = {"0", "-1", "0.001", "1000000000000"})
     void invalidAmountsAreRejectedWithoutRestOrRepositoryAccess(String amount) {
         TransactionRepository repository = mock(TransactionRepository.class);
-        TransactionService service = new TransactionService(repository, validator("1000"));
+        TransactionService service = new TransactionService(repository, validator("1000"), mock(TransactionWorkflow.class));
 
-        assertThatThrownBy(() -> service.create(command(amount)))
+        assertThatThrownBy(() -> service.create(UUID.randomUUID(), command(amount)))
                 .isInstanceOf(ConstraintViolationException.class);
         verifyNoInteractions(repository);
     }

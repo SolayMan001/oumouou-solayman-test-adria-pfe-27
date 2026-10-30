@@ -1,6 +1,9 @@
 package com.adria.bank.transaction.web.rest;
 
 import java.util.List;
+import java.net.URI;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.RequestHeader;
 import java.util.UUID;
 
 import com.adria.bank.transaction.service.TransactionService;
@@ -40,7 +43,9 @@ public class TransactionRestController {
     }
 
     @PostMapping
-    public TransactionResponse create(@Valid @RequestBody CreateTransactionRequest request) {
-        return TransactionResponse.from(service.create(request.toCommand()));
+    public ResponseEntity<TransactionResponse> create(@RequestHeader("Idempotency-Key") UUID requestId,
+            @Valid @RequestBody CreateTransactionRequest request) {
+        TransactionResponse response = TransactionResponse.from(service.create(requestId, request.toCommand()));
+        return ResponseEntity.created(URI.create("/api/transactions/" + response.id())).body(response);
     }
 }

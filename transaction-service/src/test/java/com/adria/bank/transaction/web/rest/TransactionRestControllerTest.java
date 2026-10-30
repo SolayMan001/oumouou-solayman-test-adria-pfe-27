@@ -58,7 +58,7 @@ class TransactionRestControllerTest {
     void validPublicPostReturns503AndPersistsNothing(String amount) throws Exception {
         ObjectNode body = validRequest();
         body.put("amount", new BigDecimal(amount));
-        mvc.perform(post("/api/transactions").contentType(MediaType.APPLICATION_JSON).content(body.toString()))
+        mvc.perform(post("/api/transactions").header("Idempotency-Key", UUID.randomUUID()).contentType(MediaType.APPLICATION_JSON).content(body.toString()))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.code").value("ACCOUNT_INTEGRATION_UNAVAILABLE"))
@@ -72,7 +72,7 @@ class TransactionRestControllerTest {
     @Test
     void unavailablePublicPostDoesNotChangeExistingRecords() throws Exception {
         BankTransaction existing = persist(UUID.randomUUID(), "25.00");
-        mvc.perform(post("/api/transactions").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/transactions").header("Idempotency-Key", UUID.randomUUID()).contentType(MediaType.APPLICATION_JSON)
                         .content(validRequest().toString()))
                 .andExpect(status().isServiceUnavailable());
         assertThat(repository.count()).isEqualTo(1);
@@ -85,7 +85,7 @@ class TransactionRestControllerTest {
     void invalidPublicPostReturns400AndPersistsNothing(String field, String jsonValue, String code) throws Exception {
         ObjectNode body = validRequest();
         body.set(field, objectMapper.readTree(jsonValue));
-        mvc.perform(post("/api/transactions").contentType(MediaType.APPLICATION_JSON).content(body.toString()))
+        mvc.perform(post("/api/transactions").header("Idempotency-Key", UUID.randomUUID()).contentType(MediaType.APPLICATION_JSON).content(body.toString()))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.code").value(code));
@@ -116,7 +116,7 @@ class TransactionRestControllerTest {
     void missingMandatoryFieldsReturn400(String field) throws Exception {
         ObjectNode body = validRequest();
         body.remove(field);
-        mvc.perform(post("/api/transactions").contentType(MediaType.APPLICATION_JSON).content(body.toString()))
+        mvc.perform(post("/api/transactions").header("Idempotency-Key", UUID.randomUUID()).contentType(MediaType.APPLICATION_JSON).content(body.toString()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.errors." + field).isNotEmpty());
@@ -128,7 +128,7 @@ class TransactionRestControllerTest {
     void clientSuppliedIdentifiersAndTimestampsAreRejected(String field) throws Exception {
         ObjectNode body = validRequest();
         body.put(field, field.equals("id") ? UUID.randomUUID().toString() : "2020-01-01T00:00:00Z");
-        mvc.perform(post("/api/transactions").contentType(MediaType.APPLICATION_JSON).content(body.toString()))
+        mvc.perform(post("/api/transactions").header("Idempotency-Key", UUID.randomUUID()).contentType(MediaType.APPLICATION_JSON).content(body.toString()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"));
         assertThat(repository.count()).isZero();
@@ -137,7 +137,7 @@ class TransactionRestControllerTest {
     @ParameterizedTest
     @ValueSource(strings = {"", "{broken", "[]"})
     void malformedRequestsReturn400AndPersistNothing(String body) throws Exception {
-        mvc.perform(post("/api/transactions").contentType(MediaType.APPLICATION_JSON).content(body))
+        mvc.perform(post("/api/transactions").header("Idempotency-Key", UUID.randomUUID()).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"));
         assertThat(repository.count()).isZero();

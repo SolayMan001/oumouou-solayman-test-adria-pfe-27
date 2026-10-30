@@ -3,7 +3,6 @@ package com.adria.bank.transaction.web.rest;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import com.adria.bank.transaction.service.AccountIntegrationUnavailableException;
 import com.adria.bank.transaction.service.TransactionNotFoundException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.beans.TypeMismatchException;
@@ -22,14 +21,20 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 @RestControllerAdvice
 public class RestExceptionHandler extends ResponseEntityExceptionHandler {
 
+    @ExceptionHandler(com.adria.bank.transaction.service.TransactionProcessingException.class)
+    public ProblemDetail handleProcessing(com.adria.bank.transaction.service.TransactionProcessingException exception) {
+        return problem(HttpStatus.valueOf(exception.getStatus()), exception.getCode(), exception.getMessage());
+    }
+
     @ExceptionHandler(TransactionNotFoundException.class)
     public ProblemDetail handleNotFound(TransactionNotFoundException exception) {
         return problem(HttpStatus.NOT_FOUND, "TRANSACTION_NOT_FOUND", exception.getMessage());
     }
 
-    @ExceptionHandler(AccountIntegrationUnavailableException.class)
-    public ProblemDetail handleIntegrationUnavailable(AccountIntegrationUnavailableException exception) {
-        return problem(HttpStatus.SERVICE_UNAVAILABLE, "ACCOUNT_INTEGRATION_UNAVAILABLE", exception.getMessage());
+    @ExceptionHandler({org.springframework.dao.DataAccessException.class, org.springframework.transaction.TransactionException.class})
+    public ProblemDetail handleLocalStorageFailure(RuntimeException exception) {
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, "RECOVERY_REQUIRED",
+                "Local storage is unavailable. Reuse the same Idempotency-Key to inspect or reconcile the operation.");
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

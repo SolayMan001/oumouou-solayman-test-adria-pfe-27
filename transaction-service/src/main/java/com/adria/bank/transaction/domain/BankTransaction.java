@@ -24,6 +24,9 @@ public class BankTransaction {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    @Column(unique = true, updatable = false)
+    private UUID operationId;
+
     @Column(name = "account_id", nullable = false, updatable = false)
     private UUID accountId;
 
@@ -58,6 +61,11 @@ public class BankTransaction {
     private void generateTimestamp() {
         // Match database timestamp precision so returned and reloaded values agree.
         createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+    }
+
+    public void assignOperation(UUID operationId) {
+        if (this.operationId != null) { throw new IllegalStateException("Operation already assigned."); }
+        this.operationId = operationId;
     }
 
     public UUID getId() {

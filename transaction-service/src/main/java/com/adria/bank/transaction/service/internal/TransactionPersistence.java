@@ -10,7 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Internal local persistence primitive, not a complete banking operation.
  * It performs no account verification or balance update and is not exposed by REST.
- * A future integrated workflow must complete those prerequisites before using it.
+ * The integrated workflow confirms the debit ledger before using this component.
  */
 @Component
 public class TransactionPersistence {
@@ -25,8 +25,15 @@ public class TransactionPersistence {
 
     @Transactional
     public BankTransaction persist(TransactionCommand command) {
+        return persist(command, null);
+    }
+
+    @Transactional
+    public BankTransaction persist(TransactionCommand command, java.util.UUID operationId) {
         validator.validate(command);
-        return repository.save(new BankTransaction(command.accountId(), command.amount(), command.currency(),
-                command.merchantCategory(), command.country()));
+        BankTransaction transaction = new BankTransaction(command.accountId(), command.amount(), command.currency(),
+                command.merchantCategory(), command.country());
+        if (operationId != null) { transaction.assignOperation(operationId); }
+        return repository.saveAndFlush(transaction);
     }
 }

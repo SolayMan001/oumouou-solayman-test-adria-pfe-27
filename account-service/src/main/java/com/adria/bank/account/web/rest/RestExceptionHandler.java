@@ -23,6 +23,16 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 @RestControllerAdvice
 public class RestExceptionHandler extends ResponseEntityExceptionHandler {
 
+    @ExceptionHandler(com.adria.bank.account.service.DebitOperationNotFoundException.class)
+    public ProblemDetail handleOperationNotFound(com.adria.bank.account.service.DebitOperationNotFoundException exception) {
+        return problem(HttpStatus.NOT_FOUND, "OPERATION_NOT_FOUND", exception.getMessage());
+    }
+
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ProblemDetail handleOperationCollision(org.springframework.dao.DataIntegrityViolationException exception) {
+        return problem(HttpStatus.CONFLICT, "OPERATION_CONFLICT", "Operation ID conflicts with an existing debit.");
+    }
+
     @ExceptionHandler(AccountNotFoundException.class)
     public ProblemDetail handleNotFound(AccountNotFoundException exception) {
         return problem(HttpStatus.NOT_FOUND, "ACCOUNT_NOT_FOUND", exception.getMessage());

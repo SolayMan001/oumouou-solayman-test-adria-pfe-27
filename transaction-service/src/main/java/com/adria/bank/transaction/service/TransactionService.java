@@ -17,10 +17,12 @@ public class TransactionService {
 
     private final TransactionRepository repository;
     private final TransactionValidator validator;
+    private final TransactionWorkflow workflow;
 
-    public TransactionService(TransactionRepository repository, TransactionValidator validator) {
+    public TransactionService(TransactionRepository repository, TransactionValidator validator, TransactionWorkflow workflow) {
         this.repository = repository;
         this.validator = validator;
+        this.workflow = workflow;
     }
 
     public List<BankTransaction> list() {
@@ -36,9 +38,9 @@ public class TransactionService {
         return repository.findByAccountId(accountId);
     }
 
-    public BankTransaction create(TransactionCommand command) {
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    public BankTransaction create(@NotNull UUID requestId, TransactionCommand command) {
         validator.validate(command);
-        // No persistence dependency or success path until the integrated workflow exists.
-        throw new AccountIntegrationUnavailableException();
+        return workflow.create(requestId, command);
     }
 }

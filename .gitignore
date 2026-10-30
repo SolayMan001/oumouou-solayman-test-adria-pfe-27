@@ -25,3 +25,6 @@ replay_pid*
 
 # Maven build output (all modules)
 target/
+
+# Local durable H2 databases
+data/
