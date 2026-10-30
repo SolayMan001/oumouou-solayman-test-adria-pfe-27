@@ -1,7 +1,17 @@
 spring:
   application:
     name: account-service
+  jackson:
+    deserialization:
+      fail-on-numbers-for-enums: true
+  datasource:
+    url: jdbc:h2:mem:accounts;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;LOCK_TIMEOUT=5000
+    username: sa
+    password: ""
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: create-drop
 
-# Reserved for the web server when it is introduced in a later part.
 server:
   port: 8081

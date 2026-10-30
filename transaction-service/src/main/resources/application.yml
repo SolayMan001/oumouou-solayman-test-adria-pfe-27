@@ -1,7 +1,21 @@
 spring:
   application:
     name: transaction-service
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+  datasource:
+    url: jdbc:h2:mem:transactions;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password: ""
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: create-drop
 
-# Reserved for the web server when it is introduced in a later part.
 server:
   port: 8082
+
+bank:
+  transaction:
+    max-amount: 1000
