@@ -46,12 +46,13 @@ class TransactionWorkflowTest {
     @Autowired org.springframework.ai.tool.ToolCallbackProvider toolCallbacks;
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper mapper;
+    @Autowired com.adria.bank.transaction.events.OutboxRepository outbox;
     @Autowired TransactionRepository transactions;
     @Autowired ProcessingOperationRepository operations;
     @MockitoSpyBean TransactionPersistence persistence;
 
     @BeforeEach
-    void setup() { circuits.circuitBreaker("account-service").reset(); operations.deleteAll(); transactions.deleteAll(); remote.reset(); }
+    void setup() { circuits.circuitBreaker("account-service").reset(); outbox.deleteAll(); operations.deleteAll(); transactions.deleteAll(); remote.reset(); }
     @AfterAll
     static void shutdown() { remote.server.stop(0); remote.executor.shutdownNow(); }
 
@@ -100,6 +101,7 @@ class TransactionWorkflowTest {
         assertThat(remote.debitCalls.get()).isEqualTo(1);
         assertThat(remote.balance).isEqualByComparingTo("90.00");
         assertThat(transactions.count()).isEqualTo(1);
+        assertThat(outbox.count()).isEqualTo(1);
     }
 
     @Test

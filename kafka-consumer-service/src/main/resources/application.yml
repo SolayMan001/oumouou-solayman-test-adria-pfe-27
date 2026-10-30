@@ -1,7 +1,18 @@
 spring:
   application:
     name: kafka-consumer-service
-
-# Reserved for the web server when it is introduced in a later part.
-server:
-  port: 8084
+  main:
+    web-application-type: none
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    admin:
+      auto-create: false
+    consumer:
+      group-id: bank-transaction-loggers
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      ack-mode: record
+      missing-topics-fatal: false

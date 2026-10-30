@@ -1,0 +1,9 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:assistant-tests;DB_CLOSE_DELAY=-1
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+assistant:
+  model:
+    api-key: test-only-not-a-real-key

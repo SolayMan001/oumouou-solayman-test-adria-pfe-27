@@ -17,10 +17,13 @@ public class TransactionPersistence {
 
     private final TransactionRepository repository;
     private final TransactionValidator validator;
+    private final com.adria.bank.transaction.events.OutboxRecorder events;
 
-    public TransactionPersistence(TransactionRepository repository, TransactionValidator validator) {
+    public TransactionPersistence(TransactionRepository repository, TransactionValidator validator,
+            com.adria.bank.transaction.events.OutboxRecorder events) {
         this.repository = repository;
         this.validator = validator;
+        this.events = events;
     }
 
     @Transactional
@@ -34,6 +37,8 @@ public class TransactionPersistence {
         BankTransaction transaction = new BankTransaction(command.accountId(), command.amount(), command.currency(),
                 command.merchantCategory(), command.country());
         if (operationId != null) { transaction.assignOperation(operationId); }
-        return repository.saveAndFlush(transaction);
+        transaction = repository.saveAndFlush(transaction);
+        events.record(transaction);
+        return transaction;
     }
 }

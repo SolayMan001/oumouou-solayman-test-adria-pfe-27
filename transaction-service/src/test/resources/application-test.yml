@@ -15,3 +15,7 @@ account:
 eureka:
   client:
     enabled: false
+
+bank:
+  events:
+    enabled: false

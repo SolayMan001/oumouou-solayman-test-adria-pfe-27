@@ -1,4 +1,18 @@
 spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    admin:
+      auto-create: false
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+        max.block.ms: 1000
+        request.timeout.ms: 1000
+        delivery.timeout.ms: 5000
   config:
     import: optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}
   ai:
@@ -44,6 +58,10 @@ server:
   port: 8082
 
 bank:
+  events:
+    enabled: ${KAFKA_OUTBOX_ENABLED:true}
+    poll-interval-ms: 5000
+    initial-delay-ms: 5000
   transaction:
     max-amount: 1000
 

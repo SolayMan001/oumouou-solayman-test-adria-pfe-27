@@ -1,7 +1,32 @@
 spring:
   application:
     name: ai-assistant-service
-
-# Reserved for the web server when it is introduced in a later part.
+  ai:
+    mcp:
+      client:
+        # Connections are initialized lazily so an offline bank server cannot prevent startup.
+        # The application registers only confirmation-protected MCP callbacks with ChatClient.
+        enabled: false
+  datasource:
+    url: jdbc:h2:file:${bank.data-directory:./data}/assistant;DB_CLOSE_ON_EXIT=FALSE;WRITE_DELAY=0
+    username: sa
+    password: ""
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
 server:
   port: 8083
+assistant:
+  model:
+    api-key: ${OPENAI_API_KEY:}
+    base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+    name: ${OPENAI_MODEL:gpt-4.1-mini}
+  mcp:
+    account-url: ${ACCOUNT_MCP_URL:http://localhost:8081/mcp}
+    transaction-url: ${TRANSACTION_MCP_URL:http://localhost:8082/mcp}
+    timeout: 10s
+logging:
+  level:
+    org.springframework.ai: ERROR
+    io.modelcontextprotocol: ERROR
