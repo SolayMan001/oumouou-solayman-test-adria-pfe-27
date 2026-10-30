@@ -1,7 +1,29 @@
 spring:
   application:
     name: gateway-service
-
-# Reserved for the web server when it is introduced in a later part.
+  main:
+    web-application-type: reactive
+  cloud:
+    loadbalancer:
+      retry:
+        enabled: false
+      cache:
+        enabled: false
 server:
   port: 8080
+
+eureka:
+  instance:
+    prefer-ip-address: true
+    ip-address: ${SERVICE_HOST:127.0.0.1}
+    instance-id: ${spring.application.name}:${server.port}:${random.uuid}
+    lease-renewal-interval-in-seconds: 5
+  client:
+    enabled: ${DISCOVERY_ENABLED:true}
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+    registry-fetch-interval-seconds: 5
+    initial-instance-info-replication-interval-seconds: 1
+    instance-info-replication-interval-seconds: 5
+    eureka-server-connect-timeout-seconds: 1
+    eureka-server-read-timeout-seconds: 1

@@ -1,7 +1,12 @@
 spring:
   application:
     name: config-service
-
-# Reserved for the web server when it is introduced in a later part.
+  profiles:
+    active: native
+  cloud:
+    config:
+      server:
+        native:
+          search-locations: ${CONFIG_REPOSITORY_LOCATIONS:classpath:/config-repo/}
 server:
   port: 8888

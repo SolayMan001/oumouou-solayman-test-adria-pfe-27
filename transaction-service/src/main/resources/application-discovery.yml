@@ -1,0 +1,5 @@
+# Empty URL uses the Feign client name (account-service) through Eureka.
+# ACCOUNT_SERVICE_URL still takes precedence when an explicit direct URL is needed.
+account:
+  service:
+    url: ${ACCOUNT_SERVICE_URL:}

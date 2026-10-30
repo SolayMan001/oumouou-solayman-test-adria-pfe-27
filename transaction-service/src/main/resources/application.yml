@@ -1,4 +1,6 @@
 spring:
+  config:
+    import: optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}
   ai:
     mcp:
       server:
@@ -14,6 +16,12 @@ spring:
   application:
     name: transaction-service
   cloud:
+    config:
+      request-connect-timeout: 1000
+      request-read-timeout: 1000
+    loadbalancer:
+      retry:
+        enabled: false
     openfeign:
       client:
         config:
@@ -41,7 +49,7 @@ bank:
 
 account:
   service:
-    url: http://localhost:8081
+    url: ${ACCOUNT_SERVICE_URL:http://localhost:8081}
 
 bank-account-circuit:
   sliding-window-size: 10
@@ -49,3 +57,19 @@ bank-account-circuit:
   failure-rate-threshold: 50
   open-duration: 5s
   half-open-calls: 2
+
+eureka:
+  instance:
+    prefer-ip-address: true
+    ip-address: ${SERVICE_HOST:127.0.0.1}
+    instance-id: ${spring.application.name}:${server.port}:${random.uuid}
+    lease-renewal-interval-in-seconds: 5
+  client:
+    enabled: ${DISCOVERY_ENABLED:true}
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+    registry-fetch-interval-seconds: 5
+    initial-instance-info-replication-interval-seconds: 1
+    instance-info-replication-interval-seconds: 5
+    eureka-server-connect-timeout-seconds: 1
+    eureka-server-read-timeout-seconds: 1
